@@ -19,7 +19,7 @@
         r = await fetch("/api/claude", {
           method: "POST",
           headers: { "content-type": "application/json", "x-clave-equipo": getClave(intento > 0) },
-          body: JSON.stringify({ prompt: prompt, json: !!json }),
+          body: JSON.stringify({ prompt: prompt, json: !!json, images: opts.images || undefined }),
           signal: opts.signal
         });
       } catch (e) {
@@ -28,6 +28,7 @@
       }
       if (r.status !== 401) break;
     }
+    if (r.status === 413) throw { code: "prompt_too_large" };
     if (r.status === 401) throw { code: "bad_key", message: "La clave del equipo no es correcta." };
     if (!r.ok) { var j = await r.json().catch(function () { return {}; }); throw { code: j.code || "upstream_error", message: j.detail }; }
     var reader = r.body.getReader(), dec = new TextDecoder(), text = "";

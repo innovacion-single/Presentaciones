@@ -4,7 +4,8 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ code: "method" });
   const clave = req.headers["x-clave-equipo"] || "";
   if (!process.env.CLAVE_EQUIPO || clave !== process.env.CLAVE_EQUIPO) return res.status(401).json({ code: "bad_key" });
-  const { prompt, json } = req.body || {};
+  const { prompt, json, images } = req.body || {};
+  const imgs = Array.isArray(images) ? images.filter((b) => typeof b === "string").slice(0, 20) : [];
   if (!prompt || typeof prompt !== "string") return res.status(400).json({ code: "no_prompt" });
   if (Buffer.byteLength(prompt) > 262144) return res.status(413).json({ code: "prompt_too_large" });
 
@@ -23,7 +24,12 @@ export default async function handler(req, res) {
       max_tokens: Number(process.env.MAX_TOKENS || 32000),
       stream: true,
       system,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{
+        role: "user",
+        content: imgs.length
+          ? imgs.map((data) => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data } })).concat([{ type: "text", text: prompt }])
+          : prompt,
+      }],
     }),
   });
   if (!up.ok) {

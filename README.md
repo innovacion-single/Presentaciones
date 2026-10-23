@@ -7,7 +7,11 @@ No necesitan cuenta de Claude: la página usa la clave de API de Single, guardad
 
 | Archivo | Para qué sirve |
 |---|---|
-| `public/index.html` | La página (la misma del artifact). |
+| `public/index.html` | La página. |
+| `public/app.js` | Carga de documentos, lectura y llamadas a Claude (Empresariales, Daños y Otra). |
+| `public/engine.js` | Motor de Empresariales (plantilla BPE de Vida Grupo). |
+| `public/otra.js` | Motor de Otra (diseño de Single con cualquier contenido). |
+| `public/danos.js` | Motor de Daños (portada, láminas fijas y comparativo en tablas). |
 | `public/claude-shim.js` | Conecta la página con `/api/claude` en lugar de la cuenta de claude.ai. |
 | `public/plantilla.json`, `public/logos.json` | Plantilla BPE y logos de las aseguradoras. |
 | `api/claude.js` | Función del servidor: revisa la clave del equipo y llama a Claude con la clave de API. |
