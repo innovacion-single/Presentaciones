@@ -10,9 +10,14 @@
     { id: "cotizaciones", name: "Póliza actual y cotizaciones", help: "Sube todos los PDF (puedes elegir varios a la vez): la póliza vigente, si la hay, y la cotización de cada aseguradora y opción. Los PDF escaneados también se leen.", req: true, multi: true, accept: ".pdf,application/pdf" },
     { id: "companias", name: "Compañías participantes", help: "PDF o Excel con las aseguradoras que participaron y las que no, con sus observaciones.", req: true, multi: false, accept: ".pdf,application/pdf,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
   ];
+  var SLOTS_OTRA = [
+    { id: "documentos", name: "Documentos", help: "Solo PDF. Sube todo lo que debe ir en la presentación (pólizas, cotizaciones, condiciones, folletos…). Puedes elegir varios a la vez; los escaneados también se leen.", req: true, multi: true, accept: ".pdf,application/pdf" },
+    { id: "referencia", name: "Referencia", help: "Opcional, solo PDF. Una presentación o documento en el que quieras que me base (estructura, orden, temas). El diseño siempre será el de Single y los datos salen de los documentos.", req: false, multi: true, accept: ".pdf,application/pdf" }
+  ];
   var state = { files: {}, result: null, ctl: null };
-  SLOTS.concat(SLOTS_DANOS).forEach(function (s) { state.files[s.id] = []; });
-  function curSlots() { return state.tipo === "danos" ? SLOTS_DANOS : SLOTS; }
+  SLOTS.concat(SLOTS_DANOS, SLOTS_OTRA).forEach(function (s) { state.files[s.id] = []; });
+  function curSlots() { return state.tipo === "danos" ? SLOTS_DANOS : state.tipo === "otra" ? SLOTS_OTRA : SLOTS; }
+  function brief() { return { tema: ($("brief-tema").value || "").trim(), cond: ($("brief-cond").value || "").trim() }; }
   var $ = function (id) { return document.getElementById(id); };
 
   /* ---------- Carga de archivos ---------- */
@@ -53,7 +58,9 @@
   function renderCheck() {
     var ul = $("checklist"); ul.textContent = "";
     var items = [];
+    $("brief").hidden = state.tipo !== "otra";
     if (state.tipo === "danos") return renderCheckDanos(ul);
+    if (state.tipo === "otra") return renderCheckOtra(ul);
     var hasC = state.files.caratula.length, hasG = state.files.cg.length;
     items.push([hasC ? "ok" : "err", hasC ? "Carátula cargada." : "Falta la carátula de la póliza. Es obligatoria."]);
     var esOtra = state.tipo === "otra";
@@ -92,6 +99,22 @@
     var ok = nc && hasL;
     $("go").disabled = !ok || !!state.ctl || !!state.noClaude;
     $("go-note").textContent = state.noClaude || (ok ? "Tarda de 3 a 8 minutos según cuántos PDF subas. No cierres esta página mientras trabaja." : "El botón se activa cuando cargues los PDF y la lista de compañías.");
+  }
+
+  function renderCheckOtra(ul) {
+    var nd = state.files.documentos.length, nr = state.files.referencia.length, b = brief();
+    var items = [[nd ? "ok" : "err", nd ? nd + (nd === 1 ? " PDF cargado." : " PDF cargados.") : "Faltan los documentos (PDF). Son obligatorios."],
+      [b.tema ? "ok" : "err", b.tema ? "Ya dijiste de qué se trata la presentación." : "Escribe de qué se trata la presentación."],
+      [b.cond ? "ok" : "warn", b.cond ? "Condiciones especiales anotadas." : "Sin condiciones especiales."],
+      [nr ? "ok" : "warn", nr ? "Referencia cargada: se usará como guía de estructura y temas." : "Sin referencia: la estructura la propone Claude con base en los documentos."]];
+    items.forEach(function (it) {
+      var li = document.createElement("li"); var d = document.createElement("span"); d.className = "dot " + it[0];
+      var t = document.createElement("span"); t.textContent = it[1]; li.append(d, t); ul.append(li);
+    });
+    $("tipo-note").textContent = "Se usará el diseño de Single con el contenido de los documentos que subas.";
+    var ok = nd && b.tema;
+    $("go").disabled = !ok || !!state.ctl || !!state.noClaude;
+    $("go-note").textContent = state.noClaude || (ok ? "Tarda de 2 a 6 minutos según cuántos PDF subas. No cierres esta página mientras trabaja." : "El botón se activa cuando cargues los PDF y escribas de qué se trata la presentación.");
   }
 
   /* ---------- Lectura de PDF ---------- */
@@ -184,9 +207,13 @@
       "\nNotas: exclusiones_accidente máximo 16 items; exclusiones_invalidez máximo 13; funeraria máximo 2 secciones de hasta 8 items, null si no hay asistencia funeraria; documentos fallecimiento máximo 8 e invalidez máximo 6 (null o vacío si no hay invalidez); consentimiento.items máximo 2 (documentos válidos para pago, aceptación de consentimientos de otras aseguradoras, etc.); accidente máximo 2 grupos de 4 items; usa null en lo que la póliza no tenga." +
       "\n\nDOCUMENTOS:\n" + src;
   }
-  function promptOtra(src) {
+  function promptOtra(src, ctx) {
+    ctx = ctx || {};
     return RULES.replace("que llena la presentación para cliente de una póliza de Vida Grupo", "que arma una presentación para cliente con el diseño de Single") +
       "\n\nTAREA: arma el plan de láminas de la presentación con el contenido de los documentos (cualquier ramo que no sea Empresariales ni Daños). Usa solo lo que traen los documentos; no agregues láminas de temas que no vienen." +
+      "\nDE QUÉ SE TRATA LA PRESENTACIÓN (lo escribió el ejecutivo): " + (ctx.tema || "(no lo indicó)") +
+      (ctx.cond ? "\nCONDICIONES ESPECIALES QUE PIDIÓ EL EJECUTIVO (síguelas, siempre que no te obliguen a inventar datos): " + ctx.cond : "") +
+      (ctx.ref ? "\nREFERENCIA: abajo vienen documentos marcados como REFERENCIA. Básate en ellos para la estructura, el orden de las láminas, los temas que se tratan y el estilo de redacción. Los datos y cifras salen de los DOCUMENTOS, no de la referencia, salvo que las condiciones especiales digan lo contrario; si la referencia trae un tema que los documentos no cubren, no lo inventes: avísalo en faltantes. El diseño siempre es el de Single." : "") +
       "\nResponde SOLO con un objeto JSON con esta forma:\n" +
       JSON.stringify({
         aseguradora: "nombre de la aseguradora o null",
@@ -210,10 +237,11 @@
   /* ---------- Avance ---------- */
   var STEPS_VIDA = [["read", "Leer los documentos"], ["a", "Analizar la póliza y sus coberturas"], ["b", "Analizar exclusiones, asistencias y siniestros"], ["build", "Armar el PowerPoint"]];
   var STEPS_DANOS = [["read", "Leer los PDF y la lista de compañías"], ["a", "Extraer los datos de cada documento"], ["b", "Armar el comparativo con Claude"], ["build", "Armar el PowerPoint"]];
+  var STEPS_OTRA = [["read", "Leer los documentos"], ["a", "Extraer el contenido"], ["b", "Planear las láminas con Claude"], ["build", "Armar el PowerPoint"]];
   var STEPS = STEPS_VIDA;
   function renderSteps() {
     var ol = $("steps"); ol.textContent = "";
-    STEPS = state.tipo === "danos" ? STEPS_DANOS : STEPS_VIDA;
+    STEPS = state.tipo === "danos" ? STEPS_DANOS : state.tipo === "otra" ? STEPS_OTRA : STEPS_VIDA;
     STEPS.forEach(function (s) { var li = document.createElement("li"); li.className = "step"; li.id = "st-" + s[0]; li.innerHTML = "<i></i><div><span></span><small></small></div>"; li.querySelector("span").textContent = s[1]; ol.append(li); });
   }
   function step(id, cls, msg) { var li = $("st-" + id); if (!li) return; li.className = "step " + (cls || ""); if (msg != null) li.querySelector("small").textContent = msg; }
@@ -279,6 +307,7 @@
     var missing = [], confirm = [];
     try {
       if (state.tipo === "danos") { await runDanos(sample, downloads, signal); return; }
+      if (state.tipo === "otra") { await runOtraFlow(sample, downloads, signal); return; }
       // 1. Leer
       step("read", "run", "Abriendo los PDF…");
       var parts = [], cgText = "";
@@ -374,12 +403,33 @@
     }
   }
 
-  async function runOtra(sample, downloads, src, missing, confirm, signal) {
-    step("a", "run", "Esperando a Claude… (puede pedirte permiso la primera vez)");
-    var P = await sample.json(promptOtra(src), { modelTier: "default", signal: signal, onText: function (o) { step("a", "run", "Escribiendo… " + o.text.length + " caracteres"); } });
+  function promptTranscribeOtra(tema) {
+    return function (name, from, to) {
+      return RULES.replace("que llena la presentación para cliente de una póliza de Vida Grupo", "que arma una presentación para cliente con el diseño de Single") +
+        "\n\nLas imágenes son las páginas " + from + " a " + to + " del documento \"" + name + "\" (PDF escaneado). La presentación trata de: " + (tema || "(sin indicar)") + ". Transcribe TEXTUALMENTE, sin resumir ni cambiar cifras, lo útil para esa presentación (datos de la póliza o cotización, coberturas, sumas, deducibles, primas, condiciones, exclusiones, procedimientos, contactos). Escribe las tablas renglón por renglón con ' | ' entre columnas. Omite textos legales repetitivos. Pon \"[Página n]\" antes de cada página; si una página no tiene nada útil, escribe \"[Página n] sin datos útiles\".";
+    };
+  }
+  function promptCondenseOtra(tema) {
+    return function (name, chunk, i, n) {
+      return RULES.replace("que llena la presentación para cliente de una póliza de Vida Grupo", "que arma una presentación para cliente con el diseño de Single") +
+        "\n\nEste es el fragmento " + i + " de " + n + " del documento \"" + name + "\". La presentación trata de: " + (tema || "(sin indicar)") + ". Copia TEXTUALMENTE (sin resumir ni cambiar cifras) solo los pasajes útiles para esa presentación. Pon el nombre de la sección antes de cada pasaje. Máximo 25,000 caracteres. Si no hay nada útil, responde 'SIN PASAJES'.\n\nFRAGMENTO:\n" + chunk;
+    };
+  }
+  async function runOtraFlow(sample, downloads, signal) {
+    var missing = [], confirm = [], b = brief();
+    var limits = await sample.limits().catch(function () { return null; });
+    var room = ((limits && limits.maxPromptBytes) || 262144) - 18000 - (new TextEncoder()).encode(b.tema + b.cond).length;
+    var all = state.files.documentos.map(function (f) { return { f: f, label: "DOCUMENTO" }; }).concat(state.files.referencia.map(function (f) { return { f: f, label: "REFERENCIA" }; }));
+    var prep = await prepareDocs(sample, signal, all, { tema: "Contenido", transcribe: promptTranscribeOtra(b.tema), condense: promptCondenseOtra(b.tema), recorte: "Revisa que no falte contenido; si falta, sube menos páginas o quita anexos que no sirvan." }, missing, confirm, room);
+    step("a", "done", Math.round(bytes(prep.src) / 1024) + " KB de " + prep.n + " archivos");
+    await runOtra(sample, downloads, prep.src, missing, confirm, signal, { tema: b.tema, cond: b.cond, ref: state.files.referencia.length > 0 });
+  }
+
+  async function runOtra(sample, downloads, src, missing, confirm, signal, ctx) {
+    step("b", "run", "Esperando a Claude…");
+    var P = await sample.json(promptOtra(src, ctx), { modelTier: "default", signal: signal, onText: function (o) { step("b", "run", "Escribiendo… " + o.text.length + " caracteres"); } });
     if (!P || typeof P !== "object" || !Array.isArray(P.laminas)) throw { code: "invalid_json" };
-    step("a", "done", (P.aseguradora || "Sin aseguradora") + " · " + P.laminas.length + " láminas de contenido");
-    step("b", "done", "No aplica para este tipo");
+    step("b", "done", (P.aseguradora || "Sin aseguradora") + " · " + P.laminas.length + " láminas de contenido");
     step("build", "run", "Cargando el diseño de Single…");
     var tpl = await (await fetch("plantilla.json")).json();
     var zip = await JSZip.loadAsync(tpl.base64, { base64: true });
@@ -393,6 +443,7 @@
     var info = OtraEngine.build(deck, P, opts);
     Object.keys(deck.f).forEach(function (n) { zip.file(n, deck.f[n]); });
     Object.keys(zip.files).forEach(function (n) {
+      if (zip.files[n] && zip.files[n].dir) return; // las carpetas no se borran (borrar "ppt/media/" borraría todas las imágenes)
       if (/\.(xml|rels)$/.test(n) && !(n in deck.f)) zip.remove(n);
       else if (/^ppt\/media\//.test(n) && !info.usedMedia[n.split("/").pop()]) zip.remove(n);
     });
@@ -500,21 +551,19 @@
       "\n\nDOCUMENTOS:\n" + src;
   }
 
-  async function runDanos(sample, downloads, signal) {
-    var missing = [], confirm = [], fecha = fechaHoy();
-    var limits = await sample.limits().catch(function () { return null; });
-    var maxB = (limits && limits.maxPromptBytes) || 262144, room = maxB - 16000;
-    var docs = [], work = [];
+  /* Lee PDF (y Excel), pasa los escaneados por Claude como imagen y extrae lo útil de los largos. all = [{f, label}] */
+  async function prepareDocs(sample, signal, all, P, missing, confirm, room) {
+    var tema = P.tema;
+    var docs = [];
     step("read", "run", "Abriendo los archivos…");
-    var all = state.files.cotizaciones.map(function (f) { return { f: f, kind: "doc" }; }).concat(state.files.companias.map(function (f) { return { f: f, kind: "lista" }; }));
     for (var i = 0; i < all.length; i++) {
-      var f = all[i].f, label = all[i].kind === "lista" ? "LISTA DE COMPAÑÍAS PARTICIPANTES" : "DOCUMENTO";
+      var f = all[i].f, label = all[i].label;
       step("read", "run", "Leyendo " + (i + 1) + " de " + all.length + ": " + f.name);
       try {
         if (/\.xlsx$/i.test(f.name)) { docs.push({ name: f.name, label: label, text: await xlsxText(f) }); continue; }
         var r = await pdfText(f);
       } catch (e) {
-        missing.push({ dato: "No se pudo abrir \"" + f.name + "\" (" + (e && e.message || "archivo dañado") + "); no se usó en el comparativo", lamina: "Comparativo", como_resolver: "Vuelve a descargar el PDF de la aseguradora y súbelo otra vez." });
+        missing.push({ dato: "No se pudo abrir \"" + f.name + "\" (" + (e && e.message || "archivo dañado") + "); no se usó", lamina: tema, como_resolver: "Vuelve a descargar el PDF de la aseguradora y súbelo otra vez." });
         continue;
       }
       var chars = r.text.replace(/\[Página \d+\]/g, "").replace(/\s/g, "").length;
@@ -533,7 +582,7 @@
           total++;
           parts.push(async function () {
             var imgs = await pageImages(d.file, from, to);
-            var res = await sample(promptTranscribe(d.name, from, to), { signal: signal, images: imgs });
+            var res = await sample(P.transcribe(d.name, from, to), { signal: signal, images: imgs });
             step("a", "run", "Extrayendo datos… " + (++done) + " de " + total);
             return res.text;
           });
@@ -546,7 +595,7 @@
         d.parts = chunks.map(function (ch, ci) {
           total++;
           return async function () {
-            var res = await sample(promptCondenseDanos(d.name, ch, ci + 1, chunks.length), { signal: signal });
+            var res = await sample(P.condense(d.name, ch, ci + 1, chunks.length), { signal: signal });
             step("a", "run", "Extrayendo datos… " + (++done) + " de " + total);
             return /SIN PASAJES/.test(res.text) ? "" : res.text;
           };
@@ -558,14 +607,24 @@
       step("a", "run", "Extrayendo datos… 0 de " + total);
       var outs = await pool(tasks.map(function (x) { return x.t; }), 3);
       docs.forEach(function (d) { if (d.parts) { d.text = tasks.map(function (x, k) { return x.d === d ? outs[k] : null; }).filter(function (t) { return t != null; }).join("\n"); d.how = d.scanned ? "escaneado; texto leído de las imágenes por Claude" : "extracto de lo útil, copiado textualmente por Claude"; } });
-      docs.filter(function (d) { return d.scanned; }).forEach(function (d) { confirm.push({ dato: "\"" + d.name + "\" venía escaneado y se leyó como imagen; revisa sus cifras", lamina: "Comparativo", como_resolver: "Compáralo contra el PDF." }); });
+      docs.filter(function (d) { return d.scanned; }).forEach(function (d) { confirm.push({ dato: "\"" + d.name + "\" venía escaneado y se leyó como imagen; revisa sus cifras", lamina: tema, como_resolver: "Compáralo contra el PDF." }); });
     }
     var src = docs.map(function (d, k) { return "=== " + d.label + " " + (k + 1) + ": " + d.name + (d.how ? " (" + d.how + ")" : "") + " ===\n" + d.text; }).join("\n\n");
     if (bytes(src) > room) {
       src = src.slice(0, Math.floor(room / 1.15));
-      confirm.push({ dato: "Los documentos eran demasiado largos y se recortó el final del texto", lamina: "Comparativo", como_resolver: "Revisa que estén todas las aseguradoras y opciones; si falta alguna, sube menos páginas por archivo (sin condiciones generales)." });
+      confirm.push({ dato: "Los documentos eran demasiado largos y se recortó el final del texto", lamina: tema, como_resolver: P.recorte });
     }
-    step("a", "done", Math.round(bytes(src) / 1024) + " KB de datos de " + docs.length + " archivos");
+    return { src: src, n: docs.length };
+  }
+
+  async function runDanos(sample, downloads, signal) {
+    var missing = [], confirm = [], fecha = fechaHoy();
+    var limits = await sample.limits().catch(function () { return null; });
+    var maxB = (limits && limits.maxPromptBytes) || 262144, room = maxB - 16000;
+    var all = state.files.cotizaciones.map(function (f) { return { f: f, label: "DOCUMENTO" }; }).concat(state.files.companias.map(function (f) { return { f: f, label: "LISTA DE COMPAÑÍAS PARTICIPANTES" }; }));
+    var prep = await prepareDocs(sample, signal, all, { tema: "Comparativo", transcribe: promptTranscribe, condense: promptCondenseDanos, recorte: "Revisa que estén todas las aseguradoras y opciones; si falta alguna, sube menos páginas por archivo (sin condiciones generales)." }, missing, confirm, room);
+    var src = prep.src, i;
+    step("a", "done", Math.round(bytes(src) / 1024) + " KB de datos de " + prep.n + " archivos");
 
     step("b", "run", "Esperando a Claude…");
     var P = await sample.json(promptDanos(src, fecha), { signal: signal, onText: function (o) { step("b", "run", "Escribiendo… " + o.text.length + " caracteres"); } });
@@ -585,6 +644,7 @@
     var info = DanosEngine.build(deck, DanosEngine.fromPlan(P));
     Object.keys(deck.f).forEach(function (n) { zip.file(n, deck.f[n]); });
     Object.keys(zip.files).forEach(function (n) {
+      if (zip.files[n] && zip.files[n].dir) return; // las carpetas no se borran (borrar "ppt/media/" borraría todas las imágenes)
       if (/\.(xml|rels)$/.test(n) && !(n in deck.f)) zip.remove(n);
       else if (/^ppt\/media\//.test(n) && !info.usedMedia[n.split("/").pop()]) zip.remove(n);
     });
@@ -624,8 +684,9 @@
 
   $("go").onclick = function () { if (!state.ctl) run().catch(function (e) { state.ctl = null; $("stop").hidden = true; renderCheck(); fail("Algo falló al iniciar: " + (e && (e.message || e.code) || "error desconocido") + ". Recarga la página e inténtalo de nuevo."); }); };
   $("stop").onclick = function () { if (state.ctl) state.ctl.abort(); };
-  $("again").onclick = function () { state.tipo = null; Array.prototype.forEach.call(document.querySelectorAll('input[name="tipo"]'), function (r) { r.checked = false; }); SLOTS.concat(SLOTS_DANOS).forEach(function (s) { state.files[s.id] = []; }); state.result = null; $("out").hidden = true; $("prog").hidden = true; renderSlots(); renderCheck(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  $("again").onclick = function () { state.tipo = null; Array.prototype.forEach.call(document.querySelectorAll('input[name="tipo"]'), function (r) { r.checked = false; }); SLOTS.concat(SLOTS_DANOS, SLOTS_OTRA).forEach(function (s) { state.files[s.id] = []; }); $("brief-tema").value = ""; $("brief-cond").value = ""; state.result = null; $("out").hidden = true; $("prog").hidden = true; renderSlots(); renderCheck(); window.scrollTo({ top: 0, behavior: "smooth" }); };
   Array.prototype.forEach.call(document.querySelectorAll('input[name="tipo"]'), function (r) { r.addEventListener("change", function () { state.tipo = r.value; renderSlots(); renderCheck(); }); });
+  ["brief-tema", "brief-cond"].forEach(function (id) { $(id).addEventListener("input", renderCheck); });
   renderSlots(); renderCheck();
   // Revisa al abrir si esta vista puede usar Claude (no pide permiso, solo pregunta si está disponible)
   (async function () {
