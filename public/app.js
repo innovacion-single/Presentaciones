@@ -210,24 +210,28 @@
   function promptOtra(src, ctx) {
     ctx = ctx || {};
     return RULES.replace("que llena la presentación para cliente de una póliza de Vida Grupo", "que arma una presentación para cliente con el diseño de Single") +
-      "\n\nTAREA: arma el plan de láminas de la presentación con el contenido de los documentos (cualquier ramo que no sea Empresariales ni Daños). Usa solo lo que traen los documentos; no agregues láminas de temas que no vienen." +
+      "\n\nTAREA: arma el plan de láminas de la presentación con el contenido de los documentos (cualquier tema que no sea Empresariales ni Daños). Usa solo lo que traen los documentos; no agregues láminas de temas que no vienen." +
       "\nDE QUÉ SE TRATA LA PRESENTACIÓN (lo escribió el ejecutivo): " + (ctx.tema || "(no lo indicó)") +
       (ctx.cond ? "\nCONDICIONES ESPECIALES QUE PIDIÓ EL EJECUTIVO (síguelas, siempre que no te obliguen a inventar datos): " + ctx.cond : "") +
       (ctx.ref ? "\nREFERENCIA: abajo vienen documentos marcados como REFERENCIA. Básate en ellos para la estructura, el orden de las láminas, los temas que se tratan y el estilo de redacción. Los datos y cifras salen de los DOCUMENTOS, no de la referencia, salvo que las condiciones especiales digan lo contrario; si la referencia trae un tema que los documentos no cubren, no lo inventes: avísalo en faltantes. El diseño siempre es el de Single." : "") +
+      "\nLa presentación siempre empieza con la portada y termina con la lámina de cierre de Single (las dos ya existen; no las incluyas en 'laminas'). En medio van las láminas de contenido, eligiendo para cada tema el molde que mejor le quede." +
+      "\nEn los títulos puedes marcar entre ** la palabra que va en verde (p. ej. 'Tu **propuesta**'). En los textos, ** marca negritas. Úsalo con moderación." +
       "\nResponde SOLO con un objeto JSON con esta forma:\n" +
       JSON.stringify({
-        aseguradora: "nombre de la aseguradora o null",
-        portada: { cliente: "contratante sin 'SA de CV' (máx. 45)", subtitulo: "ramo o producto (máx. 35)", tipo: "tipo de póliza (máx. 40) o null", vigencia: "p. ej. '2026 - 2027' o null" },
+        portada: { categoria: "etiqueta corta en mayúsculas sobre el título, p. ej. 'GASTOS MÉDICOS MAYORES' (máx. 35)", titulo: "título principal, p. ej. el nombre del cliente o del tema (máx. 40)", subtitulo: "una línea que diga qué es la presentación (máx. 100)" },
         laminas: [
-          { tipo: "datos", titulo: "p. ej. 'MI POLIZA GNP' (máx. 35)", subtitulo: ["número de póliza (máx. 55)", "vigencia larga (máx. 70)"], filas: [{ concepto: "máx. 50", valor: "máx. 26" }] },
-          { tipo: "puntos", titulo: "máx. 30", puntos: [{ titulo: "máx. 60", texto: "máx. 300" }] },
-          { tipo: "lista", titulo: "máx. 60", items: ["máx. 200"], nota: "máx. 480 o null" },
-          { tipo: "tabla", titulo: "máx. 38", texto: "máx. 330 o null", encabezados: ["máx. 40", "máx. 25"], filas: [["máx. 80", "máx. 35"]] },
-          { tipo: "secciones", titulo: "máx. 30", subtitulo: "máx. 35 o null", grupos: [{ titulo: "máx. 70", items: ["máx. 160"] }] }
+          { tipo: "carta", saludo: "p. ej. 'Estimado equipo de ...:' (máx. 55)", parrafos: ["párrafo (máx. 450); 2 a 4 párrafos"], _nota: "carta de presentación; va firmada por Oscar E. Soltero Ponce, Director de Single Broker, con su foto. Úsala solo si el tema o las condiciones lo piden." },
+          { tipo: "texto", titulo: "máx. 45", parrafos: ["máx. 500; 1 a 2 párrafos"], recuadro: { titulo: "máx. 60", texto: "máx. 320" } },
+          { tipo: "tarjetas", titulo: "máx. 50", subtitulo: "máx. 100 o null", tarjetas: [{ titulo: "máx. 45", texto: "máx. 150" }], _nota: "2 a 6 tarjetas" },
+          { tipo: "pasos", titulo: "máx. 50", subtitulo: "máx. 100 o null", pasos: [{ titulo: "máx. 35", texto: "máx. 110" }], _nota: "2 a 4 pasos en orden" },
+          { tipo: "lista", titulo: "máx. 50", encabezado: "máx. 70", items: ["máx. 90"], pasos: [{ titulo: "máx. 35", texto: "máx. 110" }], _nota: "hasta 12 items numerados; 0 a 3 recuadros a la derecha (pasos o notas)" },
+          { tipo: "tabla", titulo: "máx. 50", encabezados: ["2 a 4 columnas, máx. 35"], filas: [["máx. 80", "máx. 50"]], _nota: "hasta 12 filas; para coberturas, sumas, deducibles, primas o comparativos" },
+          { tipo: "etiquetas", titulo: "máx. 40", grupos: [{ nombre: "máx. 25", etiquetas: ["máx. 28"] }], _nota: "1 o 2 grupos de hasta 10 etiquetas cortas; a la derecha siempre aparecen las aseguradoras aliadas de Single" },
+          { tipo: "calidad", _nota: "lámina fija de Single con sus certificaciones (ISO 9001, IQA, LUTC, MDRT); úsala solo si el tema es presentar a Single o las condiciones la piden" }
         ],
         faltantes: [], confirmar: []
       }, null, 1) +
-      "\nNotas: 'laminas' es una lista en el orden de la presentación; cada tipo se puede repetir o no usar. Límites por lámina: datos hasta 7 filas; puntos hasta 3; lista hasta 14 items; tabla hasta 20 filas; secciones hasta 2 grupos de 8 items. Entre 3 y 12 láminas según lo que traigan los documentos. En 'lamina' de faltantes/confirmar usa el tema (p. ej. 'Coberturas')." +
+      "\nNotas: 'laminas' es una lista en el orden de la presentación; cada tipo se puede repetir o no usar. Entre 3 y 12 láminas según lo que traigan los documentos y las condiciones. No incluyas los campos '_nota'. En 'lamina' de faltantes/confirmar usa el tema (p. ej. 'Coberturas')." +
       "\n\nDOCUMENTOS:\n" + src;
   }
   function promptCondense(chunk, i, n) {
@@ -429,18 +433,15 @@
     step("b", "run", "Esperando a Claude…");
     var P = await sample.json(promptOtra(src, ctx), { modelTier: "default", signal: signal, onText: function (o) { step("b", "run", "Escribiendo… " + o.text.length + " caracteres"); } });
     if (!P || typeof P !== "object" || !Array.isArray(P.laminas)) throw { code: "invalid_json" };
-    step("b", "done", (P.aseguradora || "Sin aseguradora") + " · " + P.laminas.length + " láminas de contenido");
+    step("b", "done", P.laminas.length + " láminas de contenido");
     step("build", "run", "Cargando el diseño de Single…");
-    var tpl = await (await fetch("plantilla.json")).json();
+    var tpl = await (await fetch("plantilla_otra.json")).json();
     var zip = await JSZip.loadAsync(tpl.base64, { base64: true });
     var files = {}, names = Object.keys(zip.files).filter(function (n) { return /\.(xml|rels)$/.test(n); });
     for (var i = 0; i < names.length; i++) files[names[i]] = await zip.file(names[i]).async("string");
-    var deck = new VidaEngine.Deck(files), opts = { logo: false };
-    var logoKey = P.aseguradora ? matchLogo(P.aseguradora) : null;
-    if (logoKey) { try { var lg = await (await fetch("logos.json")).json(); zip.file("ppt/media/image6.png", lg[logoKey], { base64: true }); opts.logo = true; } catch (e) { logoKey = null; } }
-    if (P.aseguradora && !logoKey) missing.push({ dato: "Logo de " + P.aseguradora + ": no está entre las aseguradoras de la lámina 3, así que se quitó", lamina: "todas", como_resolver: "Pide que se agregue su recuadro a la lámina 3." });
+    var deck = new VidaEngine.Deck(files);
     step("build", "run", "Armando las láminas…");
-    var info = OtraEngine.build(deck, P, opts);
+    var info = OtraSingleEngine.build(deck, P);
     Object.keys(deck.f).forEach(function (n) { zip.file(n, deck.f[n]); });
     Object.keys(zip.files).forEach(function (n) {
       if (zip.files[n] && zip.files[n].dir) return; // las carpetas no se borran (borrar "ppt/media/" borraría todas las imágenes)
@@ -448,13 +449,14 @@
       else if (/^ppt\/media\//.test(n) && !info.usedMedia[n.split("/").pop()]) zip.remove(n);
     });
     var blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", compression: "DEFLATE" });
-    var cli = ((P.portada && P.portada.cliente) || "cliente").replace(/[^\wÁÉÍÓÚÑáéíóúñ]+/g, "_").replace(/^_|_$/g, "").slice(0, 40);
-    var fname = "Presentacion_" + cli + "_" + (((P.portada && P.portada.vigencia) || "").replace(/\s/g, "")) + ".pptx";
-    fname = fname.replace(/_\.pptx$/, ".pptx");
+    var cli = ((P.portada && P.portada.titulo) || "presentacion").replace(/[^\wÁÉÍÓÚÑáéíóúñ]+/g, "_").replace(/^_|_$/g, "").slice(0, 40);
+    var fname = "Presentacion_" + cli + ".pptx";
     step("build", "done", fname);
     var all = [].concat(missing, P.faltantes || []).map(function (m) { return ["Falta", m]; })
       .concat([].concat(confirm, P.confirmar || []).map(function (m) { return ["Confirmar", m]; }))
-      .concat([["Revisar", { dato: "Las láminas 2, 3, 4 y la de cierre son las fijas de Single (incluido el cierre con Brenda, Gricelda y Lupita)" }]]);
+      .concat((info.warnings || []).map(function (w) { return ["Revisar", { dato: w }]; }))
+      .concat([["Revisar", { dato: "La portada y la lámina de cierre son las fijas de Single; revisa que los textos quepan en cada lámina" }]]);
+    fname = fname.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     state.result = { blob: blob, name: fname };
     showResult(all, info.laminas, downloads);
   }
@@ -655,6 +657,7 @@
     var list = [].concat(missing, P.faltantes || []).map(function (m) { return ["Falta", m]; })
       .concat([].concat(confirm, P.confirmar || []).map(function (m) { return ["Confirmar", m]; }))
       .concat((P.documentos || []).map(function (d) { return ["Leído", { dato: d.archivo + ": " + [d.aseguradora, d.tipo === "poliza_actual" ? "póliza actual" : d.tipo === "cotizacion" ? "cotización" : d.tipo === "lista_companias" ? "lista de compañías" : d.tipo, (d.opciones || []).length ? "opciones " + d.opciones.join(", ") : ""].filter(Boolean).join(" · ") }]; }));
+    fname = fname.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     state.result = { blob: blob, name: fname };
     showResult(list, info.laminas, downloads);
   }
