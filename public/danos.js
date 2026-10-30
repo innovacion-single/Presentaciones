@@ -212,6 +212,56 @@ var DanosEngine = (function () {
     return C;
   }
 
-  return { build: build, fromPlan: fromPlan, paginate: paginate };
+  /* Mete las láminas del formato anterior (menos su portada) entre la portada y el cierre del formato nuevo.
+     oldZip y newZip son JSZip ya armados; regresa newZip. */
+  async function mergeIntoNew(oldZip, newZip) {
+    var rd = function (z, p) { return z.file(p) ? z.file(p).async("string") : Promise.resolve(null); };
+    async function order(z) {
+      var pres = await rd(z, "ppt/presentation.xml"), rels = await rd(z, "ppt/_rels/presentation.xml.rels"), tgt = {}, m, re = /Id="(rId\d+)"[^>]*Target="slides\/(slide\d+\.xml)"/g;
+      while ((m = re.exec(rels))) tgt[m[1]] = m[2];
+      var out = []; re = /<p:sldId id="\d+" r:id="(rId\d+)"\/>/g;
+      while ((m = re.exec(pres))) out.push(tgt[m[1]]);
+      return out;
+    }
+    var oldOrder = await order(oldZip);
+    var theme = await rd(oldZip, "ppt/theme/theme1.xml"), am = /<a:accent1><a:srgbClr val="(\w+)"/.exec(theme || "");
+    var cmap = { accent1: am ? am[1] : "4F81BD", tx1: "000000" };
+    var pres = await rd(newZip, "ppt/presentation.xml"), prels = await rd(newZip, "ppt/_rels/presentation.xml.rels"), ct = await rd(newZip, "[Content_Types].xml");
+    var maxOf = function (str, re) { var mx = 0, m; while ((m = re.exec(str))) mx = Math.max(mx, +m[1]); return mx; };
+    var nextSlide = Object.keys(newZip.files).reduce(function (a, n) { var m = /^ppt\/slides\/slide(\d+)\.xml$/.exec(n); return m ? Math.max(a, +m[1]) : a; }, 0) + 100;
+    var nextRid = maxOf(prels, /Id="rId(\d+)"/g) + 1, nextSid = maxOf(pres, /<p:sldId id="(\d+)"/g) + 1;
+    var media = {}, ids = [];
+    for (var i = 1; i < oldOrder.length; i++) {
+      var s = oldOrder[i], x = await rd(oldZip, "ppt/slides/" + s), rel = await rd(oldZip, "ppt/slides/_rels/" + s + ".rels") || "";
+      x = x.replace(/<a:schemeClr val="(accent1|tx1)"\/>/g, function (_, c) { return '<a:srgbClr val="' + cmap[c] + '"/>'; })
+        .replace(/<a:schemeClr val="(accent1|tx1)">((?:(?!<\/a:schemeClr>)[\s\S])*)<\/a:schemeClr>/g, function (_, c, inner) { return '<a:srgbClr val="' + cmap[c] + '">' + inner + "</a:srgbClr>"; });
+      rel = rel.replace(/<Relationship [^>]*notesSlide[^>]*\/>/g, "").replace(/Target="\.\.\/slideLayouts\/slideLayout\d+\.xml"/g, 'Target="../slideLayouts/slideLayout1.xml"');
+      var targets = [], mm, mre = /Target="\.\.\/media\/([^"]+)"/g;
+      while ((mm = mre.exec(rel))) targets.push(mm[1]);
+      for (var t = 0; t < targets.length; t++) {
+        var src = targets[t];
+        if (!media[src]) { media[src] = "anterior_" + src; newZip.file("ppt/media/" + media[src], await oldZip.file("ppt/media/" + src).async("uint8array")); }
+      }
+      rel = rel.replace(/Target="\.\.\/media\/([^"]+)"/g, function (_, f) { return 'Target="../media/' + media[f] + '"'; });
+      var name = "slide" + (nextSlide++) + ".xml";
+      newZip.file("ppt/slides/" + name, x);
+      newZip.file("ppt/slides/_rels/" + name + ".rels", rel);
+      ct = ct.replace("</Types>", '<Override PartName="/ppt/slides/' + name + '" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/></Types>');
+      prels = prels.replace("</Relationships>", '<Relationship Id="rId' + nextRid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/' + name + '"/></Relationships>');
+      ids.push('<p:sldId id="' + (nextSid++) + '" r:id="rId' + (nextRid++) + '"/>');
+    }
+    Object.keys(media).forEach(function (k) {
+      var ext = media[k].split(".").pop().toLowerCase(), mime = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", svg: "image/svg+xml", emf: "image/x-emf" }[ext];
+      if (mime && ct.indexOf('Extension="' + ext + '"') < 0) ct = ct.replace("<Default ", '<Default Extension="' + ext + '" ContentType="' + mime + '"/><Default ');
+    });
+    var cur = /<p:sldIdLst>([\s\S]*?)<\/p:sldIdLst>/.exec(pres)[1].match(/<p:sldId id="\d+" r:id="rId\d+"\/>/g);
+    pres = pres.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, "<p:sldIdLst>" + cur[0] + ids.join("") + cur.slice(1).join("") + "</p:sldIdLst>");
+    newZip.file("ppt/presentation.xml", pres);
+    newZip.file("ppt/_rels/presentation.xml.rels", prels);
+    newZip.file("[Content_Types].xml", ct);
+    return newZip;
+  }
+
+  return { build: build, fromPlan: fromPlan, paginate: paginate, mergeIntoNew: mergeIntoNew };
 })();
 if (typeof module !== "undefined") module.exports = DanosEngine;

@@ -242,6 +242,14 @@ var OtraSingleEngine = (function () {
     return { usedMedia: OtraEngine.usedMedia(deck), laminas: list.length, warnings: warn };
   }
 
-  return { build: build };
+  // Solo portada y cierre (para Daños): deja las láminas 1 y 9 del formato nuevo
+  function portadaYCierre(deck, P) {
+    var now = new Date();
+    portada(deck, P || {}, MESES[now.getMonth()] + " " + now.getFullYear());
+    OtraEngine.order(deck, [1, 9]);
+    return { usedMedia: OtraEngine.usedMedia(deck) };
+  }
+
+  return { build: build, portadaYCierre: portadaYCierre };
 })();
 if (typeof module !== "undefined") module.exports = OtraSingleEngine;

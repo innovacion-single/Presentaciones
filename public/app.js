@@ -652,6 +652,22 @@
       if (/\.(xml|rels)$/.test(n) && !(n in deck.f)) zip.remove(n);
       else if (/^ppt\/media\//.test(n) && !info.usedMedia[n.split("/").pop()]) zip.remove(n);
     });
+    // Portada y cierre del formato nuevo de Single; en medio, las láminas oscuras con isotipo
+    step("build", "run", "Poniendo la portada y el cierre…");
+    var tpl2 = await (await fetch("plantilla_otra.json")).json();
+    var zip2 = await JSZip.loadAsync(tpl2.base64, { base64: true });
+    var files2 = {}, names2 = Object.keys(zip2.files).filter(function (n) { return /\.(xml|rels)$/.test(n); });
+    for (i = 0; i < names2.length; i++) files2[names2[i]] = await zip2.file(names2[i]).async("string");
+    var deck2 = new VidaEngine.Deck(files2);
+    var vig = String(P.vigencia_corta || "").trim();
+    var info2 = OtraSingleEngine.portadaYCierre(deck2, { categoria: "COMPARATIVO DE DAÑOS", titulo: String(P.cliente || "").toUpperCase(), subtitulo: "Comparativo de seguros de Daños" + (vig ? " · Vigencia " + vig : "") });
+    Object.keys(deck2.f).forEach(function (n) { zip2.file(n, deck2.f[n]); });
+    Object.keys(zip2.files).forEach(function (n) {
+      if (zip2.files[n] && zip2.files[n].dir) return;
+      if (/\.(xml|rels)$/.test(n) && !(n in deck2.f)) zip2.remove(n);
+      else if (/^ppt\/media\//.test(n) && !info2.usedMedia[n.split("/").pop()]) zip2.remove(n);
+    });
+    zip = await DanosEngine.mergeIntoNew(zip, zip2);
     var blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", compression: "DEFLATE" });
     var cli = String(P.cliente || "cliente").replace(/,?\s+S\.?\s?A\.?(\s?P\.?\s?I\.?)?(\s|$)[\s\S]*$/i, "").replace(/[^\wÁÉÍÓÚÑáéíóúñ]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
     var fname = ("Comparativo_Danos_" + cli + "_" + String(P.vigencia_corta || "").replace(/\s/g, "") + ".pptx").replace(/_\.pptx$/, ".pptx");
